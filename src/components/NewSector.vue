@@ -7,7 +7,7 @@ const emit = defineEmits(["add"]);
 const showActions = ref(false);
 
 const title = ref("");
-const color = ref("#000000");
+const color = ref("#334155");
 
 const inputEl = ref(null);
 
@@ -18,7 +18,7 @@ function addSector() {
 
   // reset state
   title.value = "";
-  color.value = "#000000";
+  color.value = "#334155";
   showActions.value = false;
 }
 
@@ -50,7 +50,7 @@ button {
   <div class="relative inline-flex items-center gap-2 px-3 text-sm" @mouseenter="handleEnter" @mouseleave="handleLeave"
     @keydown="handleKey">
     <!-- Editable title -->
-    <input ref="inputEl" v-model="title" type="text" placeholder="Novo Setor"
+    <input ref="inputEl" v-model="title" type="text" placeholder="Adicionar Novo Setor"
       class="font-normal px-2 border-b border-b-gray-200 outline-none" :style="{ color: color }" />
 
     <!-- Hover actions -->

@@ -1,12 +1,16 @@
 import Papa from "papaparse";
 import { saveAs } from "file-saver";
-import { db, addPerson, addSector } from "./db";
+import { db, addPerson, editPerson, addSector, getMeta } from "./db";
+import { safeFilename } from "./helpers";
 
 // Export people with sector titles
 export async function exportPeopleCSV() {
+  const titlePromise = getMeta('pageTitle', 'Salários'); // begin Promise
   const people = await db.people.toArray();
   const sectors = await db.sectors.toArray();
   const sectorMap = Object.fromEntries(sectors.map(s => [s.id, s.title]));
+
+  if (!people.length || !sectors.length) { alert('Não há registros para exportar.'); return; }
 
   const data = people.map(p => ({
     name: p.name,
@@ -18,10 +22,12 @@ export async function exportPeopleCSV() {
   const csv = Papa.unparse(data, { delimiter: "," });
   const bom = "\uFEFF";
   const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8;" });
-  saveAs(blob, "pessoal.csv");
+
+  const title = await titlePromise; // await Promise resolve
+  saveAs(blob, safeFilename(title) + ".csv");
 }
 
-// Colors in the desired order
+// Colors in the desired order for import
 const sectorColors = [
   "#1E3A8A", // deep navy blue
   "#15803D", // muted green
@@ -35,49 +41,47 @@ const sectorColors = [
   "#6B7280", // neutral gray
 ];
 
-// Import from CSV
 export async function importPeopleCSV(file) {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       header: true,
       delimiter: ",",
       complete: async (results) => {
+        const rows = results.data;
         try {
-          const rows = results.data;
-          const sectors = await db.sectors.toArray();
-          const sectorMap = Object.fromEntries(sectors.map(s => [s.title.trim(), s.id]));
+          await db.transaction("rw", db.people, db.sectors, async () => {
+            const sectors = await db.sectors.toArray();
+            const sectorMap = Object.fromEntries(sectors.map(s => [s.title.trim(), s.id]));
+            let nextColorIndex = sectors.length;
 
-          let nextColorIndex = 0;
+            for (const row of rows) {
+              if (!row.name) continue;
+              const sectorName = row.sector?.trim();
+              let sectorId = sectorMap[sectorName];
 
-          // Delete entire database
-          await db.delete({ disableAutoOpen: false });
-          db.open();
+              if (!sectorId && sectorName) {
+                const color = sectorColors[nextColorIndex % sectorColors.length];
+                sectorId = await addSector({ title: sectorName, color }, true);
+                sectorMap[sectorName] = sectorId;
+                nextColorIndex++;
+              }
 
-          for (const row of rows) {
-            if (!row.name) continue;
+              // Check for existing person
+              const existing = await db.people
+                .where({ name: row.name, jobTitle: row.jobTitle })
+                .first();
 
-            const sectorName = row.sector.trim();
+              const salary = parseFloat((row.salary || "").replace(",", ".")) || 0;
 
-            // Ensure sector exists
-            let sectorId = sectorMap[sectorName];
-            if (!sectorId && sectorName) {
-              // Pick color cyclically
-              const color = sectorColors[nextColorIndex % sectorColors.length];
-
-              sectorId = await addSector({ title: sectorName, color });
-              sectorMap[sectorName] = sectorId;
-
-              nextColorIndex++;
+              if (existing) {
+                // Update existing person
+                await db.people.update(existing.id, { salary, sectorId });
+              } else {
+                // Insert new person
+                await addPerson({ name: row.name, jobTitle: row.jobTitle, salary, sectorId });
+              }
             }
-
-            // Add person
-            await addPerson({
-              name: row.name,
-              jobTitle: row.jobTitle,
-              salary: parseFloat((row.salary || "").replace(",", ".")) || 0,
-              sectorId: sectorId
-            });
-          }
+          });
 
           resolve();
         } catch (err) {
