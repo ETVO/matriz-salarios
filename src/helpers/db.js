@@ -54,6 +54,8 @@ export async function addSector(newSector) {
 
     console.log(`Sector ${newSector.title} successfully added. Got id ${id}`);
 
+    return id;
+
   } catch (error) {
     console.log(`Failed to add ${newSector.title}: ${error}`);
   }

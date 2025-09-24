@@ -100,9 +100,9 @@ button {
 </style>
 
 <template>
-  <div class="person-card relative p-1 text-white rounded w-full" :style="{ backgroundColor: props.person.sectorColor }"
+  <div class="person-card relative p-1 text-[#ffffff] rounded w-full" :style="{ backgroundColor: props.person.sectorColor }"
     @mouseenter="showActions = true" @mouseleave="showActions = false">
-    <div contenteditable="true" class="text-xs font-light" @input="(e) => handleInput(e, 'name')" @blur="handleBlur"
+    <div contenteditable="true" class="text-xs font-normal" @input="(e) => handleInput(e, 'name')" @blur="handleBlur"
       @keydown="handleKey">
       {{ props.person.name }}
     </div>

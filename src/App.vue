@@ -1,8 +1,14 @@
 <script setup>
+/**
+ * TODO:
+ * - Add editable h1 title for the page, that will also go in the file name for PDF and CSV
+ * - Add sector selector switch in td
+ * - Add option to move sectors up and down (maybe an order attr)
+ * - Add Undo functionality
+ */
 import { ref } from "vue";
-import { useObservable } from "@vueuse/rxjs";
-import html2canvas from "html2canvas"
-import jsPDF from "jspdf"
+
+// DB and queries
 import {
 	db,
 	resetDatabase,
@@ -12,41 +18,42 @@ import {
 	addPerson,
 	editPerson,
 	deletePerson,
-} from "./db/db";
+} from "./helpers/db";
+import { useObservable } from "@vueuse/rxjs";
 import { liveQuery } from "dexie";
+
+// PDF generation
+import { exportPDF } from "./helpers/pdf";
+
+// CSV logic
+import { exportPeopleCSV, importPeopleCSV } from "./helpers/csv";
+
+// Custom components
 import THead from "./components/THead.vue";
 import NewSector from "./components/NewSector.vue";
 import PersonCard from "./components/PersonCard.vue";
 
-// Layout toggle (row or column)
 const layout = ref("row");
+const loading = ref(false); // loader flag
 
-// Live list of sectors
 const sectors = useObservable(liveQuery(() => db.sectors.toArray()));
 
-// Live grouped salaries: people joined with their sectors
 const salaries = useObservable(
 	liveQuery(async () => {
 		const people = await db.people.toArray();
 		const sectorsArr = await db.sectors.toArray();
-
-		// Map sectors by id for easy lookup
 		const sectorMap = Object.fromEntries(sectorsArr.map(s => [s.id, s]));
 
-		// Group people by salary
 		const grouped = {};
 		for (const person of people) {
-			if (!person.sectorId || !sectorMap[person.sectorId]) continue; // skip if sectorId invalid
-
+			if (!person.sectorId || !sectorMap[person.sectorId]) continue;
 			if (!grouped[person.salary]) grouped[person.salary] = [];
-
 			grouped[person.salary].push({
 				...person,
-				sectorColor: sectorMap[person.sectorId].color, // attach color
+				sectorColor: sectorMap[person.sectorId].color,
 			});
 		}
 
-		// Convert to array and sort descending by salary
 		return Object.entries(grouped)
 			.map(([salary, people]) => ({
 				salary: parseFloat(salary),
@@ -56,14 +63,12 @@ const salaries = useObservable(
 	})
 );
 
-// Live grouped sectors
 const columnSalaries = useObservable(
 	liveQuery(async () => {
 		const people = await db.people.toArray();
 		const sectorsArr = await db.sectors.toArray();
 		const sectorMap = Object.fromEntries(sectorsArr.map(s => [s.id, s]));
 
-		// Create an object with sectorId keys and sorted people arrays
 		const sectorPeople = {};
 		for (const sector of sectorsArr) {
 			sectorPeople[sector.id] = [];
@@ -73,63 +78,41 @@ const columnSalaries = useObservable(
 			if (!person.sectorId || !sectorMap[person.sectorId]) continue;
 			sectorPeople[person.sectorId].push({
 				...person,
-				sectorColor: sectorMap[person.sectorId].color
+				sectorColor: sectorMap[person.sectorId].color,
 			});
 		}
 
-		// Sort each sector's array by salary descending
 		for (const sectorId in sectorPeople) {
 			sectorPeople[sectorId].sort((a, b) => b.salary - a.salary);
 		}
 
-		return sectorPeople; // { sectorId: [person, person, ...] }
+		return sectorPeople;
 	})
 );
 
+const handleImport = async (event) => {
+	const file = event.target.files[0];
+	if (file) {
+		await importPeopleCSV(file);
+	}
+};
 
-const exportPDF = async () => {
-	const table = document.getElementById('salary-table')
-
-	// Hide NewSector TH
-	table.querySelector('#newSectorTH').display = 'none'
-	// Also hide all the last childs in tbody
-	const rows = table.querySelectorAll('tbody tr');
-	rows.forEach(row => {
-		const lastChild = row.lastElementChild;
-		if (lastChild) lastChild.style.display = 'none';
-	});
-
-	// Render table to canvas
-	const canvas = await html2canvas(table, { scale: 2, useCORS: true })
-	const imgData = canvas.toDataURL('image/png')
-
-	const margin = 1.5 // cm margin around the table
-	const pxToCm = 0.0264583 // approximate conversion px → cm at 96dpi
-
-	const tableWidthCm = canvas.width * pxToCm + margin * 2
-	const tableHeightCm = canvas.height * pxToCm + margin * 2
-
-	const pdf = new jsPDF('p', 'cm', [tableHeightCm, tableWidthCm])
-
-	// Place the image with a subtle margin
-	const imgWidth = canvas.width * pxToCm
-	const imgHeight = canvas.height * pxToCm
-	pdf.addImage(imgData, 'PNG', margin, margin, imgWidth, imgHeight)
-
-	pdf.save('salarios.pdf')
+async function handleExportPDF() {
+	loading.value = true;
+	await exportPDF();
+	loading.value = false;
 }
 </script>
 
 <style>
 body {
-	font-family: 'Helvetica';
+	font-family: "Helvetica";
 }
 
 #salary-table {
 	border: none;
 	border-collapse: collapse;
 	width: max-content;
-	/* table only as wide as its content */
 }
 
 #salary-table th {
@@ -145,26 +128,52 @@ body {
 #salary-table td h4 {
 	line-height: 1.15;
 }
+
+/* full page loader */
+.loader-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 1000;
+	font-size: 1.2rem;
+	font-weight: bold;
+}
 </style>
 
 <template>
 	<div class="p-6">
-		<div class="flex gap-2 mb-8">
-			<button @click="resetDatabase()" class="cursor-pointer px-4 py-2 bg-blue-600 text-white rounded text-sm">
-				Reset Dados
+		<div v-if="loading" class="loader-overlay bg-slate-950/60 text-white">
+			Gerando PDF...
+		</div>
+
+		<div class="flex gap-2 mb-8 text-xs items-center">
+			<button @click="resetDatabase" class="cursor-pointer px-3 py-1.5 bg-red-950 text-white rounded">
+				Reset
 			</button>
-			<button @click="exportPDF" class="cursor-pointer px-4 py-2 bg-blue-600 text-white rounded text-sm">
-				Exportar PDF
+			<button @click="handleExportPDF" class="cursor-pointer px-3 py-1.5 bg-red-900 text-white rounded">
+				Exportar <b>PDF</b>
 			</button>
-			<button @click="layout = 'row'" class="px-4 py-2 bg-gray-200 rounded text-sm"
+			<button @click="exportPeopleCSV" class="cursor-pointer px-4 py-1.5 bg-blue-600 text-white rounded">
+				Exportar <b>CSV</b>
+			</button>
+			<label class="cursor-pointer px-4 py-1.5 bg-blue-600 text-white rounded">
+				Importar <b>CSV</b>
+				<input type="file" accept=".csv" class="hidden" @change="handleImport" />
+			</label>
+			<button @click="layout = 'row'" class="px-4 py-1.5 bg-gray-200 rounded text-xs"
 				:class="(layout === 'row') ? 'bg-gray-800 text-white' : ''">
 				Matriz de Salários
 			</button>
 			<button @click="layout = (layout === 'column') ? 'column-reverse' : 'column'"
-				class="px-4 py-2 bg-gray-200 rounded text-sm"
+				class="px-4 py-1.5 bg-gray-200 rounded text-xs"
 				:class="(layout === 'column' || layout === 'column-reverse') ? 'bg-gray-800 text-white' : ''">
 				Ordenação Por
-				Setor {{ (layout === 'column') ? '(Crescente)' : '(Decrescente)' }}
+				Setor {{ (layout === 'column-reverse') ? '(Decrescente)' : '(Crescente)' }}
 			</button>
 		</div>
 
@@ -172,7 +181,8 @@ body {
 			<thead>
 				<tr>
 					<th v-for="sector in sectors" :key="sector.id" class="px-1 text-sm font-bold text-center">
-						<THead :sector="sector" @edit="editSector" @delete="deleteSector" />
+						<THead :sector="sector" @edit="editSector" @delete="deleteSector" @add-person="addPerson"
+							:sectors="sectors" />
 					</th>
 					<th class="align-middle" id="newSectorTH">
 						<NewSector @add="addSector" />
@@ -189,24 +199,15 @@ body {
 				</tr>
 			</tbody>
 
-			<tbody v-else-if="layout === 'column'">
+			<tbody v-else>
 				<tr>
 					<td v-for="sector in sectors" :key="sector.id" class="p-1 text-center align-top">
-						<PersonCard v-for="person in columnSalaries[sector.id] || []" :key="person.id" :person="person"
-							@edit="editPerson" @delete="deletePerson" />
-					</td>
-				</tr>
-			</tbody>
-
-			<tbody v-else-if="layout === 'column-reverse'">
-				<tr>
-					<td v-for="sector in sectors" :key="sector.id" class="p-1 text-center align-top">
-						<PersonCard v-for="person in [...(columnSalaries[sector.id] || [])].reverse()" :key="person.id"
-							:person="person" @edit="editPerson" @delete="deletePerson" />
+						<PersonCard
+							v-for="person in (layout === 'column') ? (columnSalaries[sector.id] || []) : [...(columnSalaries[sector.id] || [])].reverse()"
+							:key="person.id" :person="person" @edit="editPerson" @delete="deletePerson" />
 					</td>
 				</tr>
 			</tbody>
 		</table>
-
 	</div>
 </template>

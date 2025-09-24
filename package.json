@@ -10,9 +10,12 @@
   },
   "dependencies": {
     "@vueuse/rxjs": "^13.9.0",
+    "bootstrap-icons": "^1.13.1",
     "dexie": "^4.2.0",
-    "html2canvas": "^1.4.1",
+    "file-saver": "^2.0.5",
+    "html2canvas-pro": "^1.5.11",
     "jspdf": "^3.0.3",
+    "papaparse": "^5.5.3",
     "rxjs": "^7.8.2",
     "vue": "^3.5.21",
     "vue-color": "^3.3.2"
