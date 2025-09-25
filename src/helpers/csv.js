@@ -16,6 +16,7 @@ export async function exportPeopleCSV() {
     name: p.name,
     jobTitle: p.jobTitle,
     salary: p.salary,
+    amount: p.amount,
     sector: sectorMap[p.sectorId] || ""
   }));
 
@@ -78,7 +79,7 @@ export async function importPeopleCSV(file) {
                 await db.people.update(existing.id, { salary, sectorId });
               } else {
                 // Insert new person
-                await addPerson({ name: row.name, jobTitle: row.jobTitle, salary, sectorId });
+                await addPerson({ name: row.name, jobTitle: row.jobTitle, salary, amount: row.amount, sectorId });
               }
             }
           });

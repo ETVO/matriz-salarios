@@ -4,7 +4,7 @@ import { sectorData, salariesData } from './initData';
 
 export const db = new Dexie('SalariosDB');
 db.version(1).stores({
-  people: "++id,[name+jobTitle],name,jobTitle,salary,sectorId",
+  people: "++id,[name+jobTitle],name,jobTitle,salary,amount,sectorId",
   sectors: "++id,[order+id],title,color,order",
   meta: "key,value"
 });
@@ -45,25 +45,26 @@ export async function resetDatabase() {
         salary: salaryGroup.salary,
         name: person.name,
         jobTitle: person.jobTitle,
+        amount: person.amount ?? 1,
         sectorId
       });
     }
   }
 }
 
-export async function addSector(newSector, highest) {
+export async function addSector(newSector, highestOrder) {
   if (!newSector.title) return; // Early bird gets the worm.
 
   try {
     // Add a new sector!
-    let order;
-    if (highest) {
+    let order = 1;
+    if (highestOrder) {
       const highest = await db.sectors.orderBy('order').last();
-      order = highest ? highest.order + 1 : 0;
+      if (highest) order = highest.order + 1;
     }
     else {
       const lowest = await db.sectors.orderBy('order').first();
-      order = lowest ? lowest.order - 1 : 0;
+      if (lowest) order = lowest.order - 1;
     }
 
     const id = await db.sectors.add({
@@ -83,21 +84,52 @@ export async function addSector(newSector, highest) {
 }
 
 
-export async function editSector(id, updated) {
-  if (!updated.title) return; // Early bird gets the worm.
+export async function editSector(id, updated, refreshOrder = false) {
+  if (!updated.title) return;
 
   try {
+    // Update the current sector first
     await db.sectors.update(id, {
       title: updated.title,
       color: updated.color,
       name: updated.title.toLowerCase().replaceAll(' ', ''),
       order: updated.order,
-    })
-    console.log(`Sector ${id} updated successfully.`)
+    });
+    console.log(`Sector ${id} updated successfully.`);
+
+    if (refreshOrder) {
+      await normalizeSectorOrder(id, updated.order);
+    }
   } catch (error) {
-    console.error(`Failed to update sector ${id}:`, error)
+    console.error(`Failed to update sector ${id}:`, error);
   }
 }
+
+export async function normalizeSectorOrder(movedSectorId = null, targetOrder = null) {
+  // Fetch all sectors sorted by current order
+  const sectors = await db.sectors.orderBy('order').toArray();
+
+  // If a sector was just moved, reposition it explicitly
+  if (movedSectorId && targetOrder !== null) {
+    const idx = sectors.findIndex(s => s.id === movedSectorId);
+    const [moved] = sectors.splice(idx, 1); // remove from old spot
+    sectors.splice(targetOrder - 1, 0, moved); // insert at desired new order
+  }
+
+  // Reassign sequential orders starting from 1
+  await db.transaction('rw', db.sectors, async () => {
+    for (let i = 0; i < sectors.length; i++) {
+      const newOrder = i + 1;
+      if (sectors[i].order !== newOrder) {
+        await db.sectors.update(sectors[i].id, { order: newOrder });
+      }
+    }
+  });
+
+  console.log("Sectors normalized with explicit positioning.");
+}
+
+
 
 export async function moveSector(sectorId, direction) {
   if (direction === 'left') await moveLeft(sectorId);
@@ -156,6 +188,7 @@ export async function addPerson(newPerson) {
       name: newPerson.name.trim(),
       jobTitle: newPerson.jobTitle.trim(),
       salary: newPerson.salary,
+      amount: newPerson.amount,
       sectorId: newPerson.sectorId
     });
 
@@ -173,6 +206,7 @@ export async function editPerson(id, person) {
       name: person.name,
       jobTitle: person.jobTitle,
       salary: person.salary,
+      amount: person.amount,
       sectorId: person.sectorId
     });
     console.log(`Person ${person.name} updated successfully.`);

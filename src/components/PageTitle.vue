@@ -45,6 +45,6 @@ defineExpose({ pageTitle, saveTitle })
 </script>
 
 <template>
-  <h1 contenteditable="true" class="text-2xl font-bold border-b border-transparent focus:border-gray-400"
+  <h1 contenteditable="true"  class="text-2xl font-bold border-b border-transparent focus:border-gray-400"
     @blur="handleBlur" @keydown="handleKey" @mouseleave="handleLeave">{{ pageTitle }}</h1>
 </template>

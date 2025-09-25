@@ -49,6 +49,12 @@ async function addPersonWithUndo(person) {
 		type: "add",
 		personId: id
 	});
+
+	// wait until Vue renders the new card
+	requestAnimationFrame(() => {
+		const el = document.getElementById(`person-${id}-name`);
+		if (el) el.focus();
+	});
 }
 
 async function editPersonWithUndo(id, changes) {
@@ -199,12 +205,18 @@ const sectorsSalarySum = useObservable(
 		for (const person of people) {
 			if (person.salary === 'X') continue;
 			if (!sectorsSum[person.sectorId]) sectorsSum[person.sectorId] = 0;
-			sectorsSum[person.sectorId] += person.salary;
+			const amount = person.amount ?? 1;
+			sectorsSum[person.sectorId] += person.salary * amount;
 		}
 
 		return sectorsSum;
 	})
 );
+
+const handleDeleteDatabase = async () => {
+	history.value = []
+	deleteDatabase()
+}
 
 const handleImport = async (event) => {
 	const file = event.target.files[0];
@@ -295,7 +307,7 @@ body {
 					class="text-slate-500 px-2 py-1.25 rounded hover:bg-slate-200 hover:text-slate-800 disabled:text-slate-300 disabled:bg-white">
 					↶ Desfazer
 				</button>
-				<button @click="deleteDatabase"
+				<button @click="handleDeleteDatabase"
 					class="cursor-pointer px-2 py-1.25 border-1 border-red-600 text-red-600 hover:bg-red-600 hover:text-white rounded">
 					Limpar tudo
 				</button>
@@ -327,7 +339,7 @@ body {
 				<tr>
 					<th v-for="sector in sectors" :key="sector.id" class="px-1 text-sm font-bold text-center">
 						<THead :sector="sector" @edit="editSector" @move="moveSector" @delete="deleteSector"
-							@add-person="addPersonWithUndo" :sectors="sectors" />
+							@add-person="addPersonWithUndo" />
 						<div v-if="sectorsSalarySum">
 							<small class="opacity-70 me-1">R$</small>
 							<span>

@@ -52,7 +52,7 @@ export const salariesData = [
   {
     salary: 17657.41,
     people: [
-      { name: "Clayton / Paulo Moura", jobTitle: "Supervisor", sector: "vendas" },
+      { name: "Clayton / Paulo Moura", jobTitle: "Supervisor", sector: "vendas", amount: 2, },
       { name: "Joy", jobTitle: "Supervisor", sector: "transp" },
     ],
   },
@@ -187,7 +187,7 @@ export const salariesData = [
     salary: 2450.0,
     people: [
       { name: "(Nome)", jobTitle: "Auxiliar de Cobrança II", sector: "financeiro" },
-      { name: "(Nome)", jobTitle: "Assist. Dados / Assist. Transp.", sector: "transp" },
+      { name: "(Nome)", jobTitle: "Assist. Dados / Assist. Transp.", sector: "transp", amount: 2 },
       { name: "(Nome)", jobTitle: "Assistente Administrativo I", sector: "adm" },
     ],
   },
