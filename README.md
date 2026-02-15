@@ -34,11 +34,15 @@ This application is **super lightweight** and can be run directly from the built
 # Clone the repository
 git clone https://github.com/ETVO/matriz-salarios.git
 
-# Open index.html in your browser
-# No server or build process needed!
+# Install dependencies and build
+npm install
+npm run build
+
+# Open dist/index.html in your browser - that's it!
 ```
 
-Simply open the `index.html` file in any modern web browser and start using the application immediately.
+After building, simply open `dist/index.html` in any modern browser. The entire `dist` folder can be deployed to any static hosting or run locally with no backend infrastructure.
+
 
 ### Development Setup
 
@@ -63,11 +67,8 @@ npm install
 
 # Run development server
 npm run dev
-```
 
-#### Build for Production
-
-```bash
+# Build for production
 npm run build
 ```
 
